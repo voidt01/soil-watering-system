@@ -1,0 +1,18 @@
+# Go
+/backend/bin/
+/backend/vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+*.test
+
+React
+/frontend/node_modules/
+frontend/build/
+
+# Env files
+.env
+.env.local
