@@ -5,40 +5,37 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 )
 
 func main() {
     ctx, cancel := context.WithCancel(context.Background())
-    
-    client := newMQTTClient()
 
-    token := client.Subscribe(topic, 1, nil)
-    token.Wait()
-    log.Printf("Subscribed to topic: %s\n", topic)
+    mqttCfg := MQTTConfig{
+        Broker: "localhost",
+        ClientId: "go-backend-service",
+        Topic: "esp32/sensors",
+        Port: 1883,
+    }
 
-    // Process messages
-    var wg sync.WaitGroup
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        processedMsgChan := processMsg(ctx, mqttmsgchan)
-        for range processedMsgChan {
-            // For now, just consume; later pass to DB or frontend
-        }
-    }()
+    client, err := NewMQTTClient(ctx, mqttCfg)
+    if err != nil {
+        log.Fatalf("Failed to init MQTT: %s", err)
+        return
+    }
 
+
+    waitForShutdown(cancel)
+
+}
+
+func waitForShutdown(cancel context.CancelFunc) {
     sigChan := make(chan os.Signal, 1)
     signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-    <-sigChan
 
-	cancel()
+    sig := <-sigChan
+    log.Printf("Received signal from OS: %s", sig)
 
-    log.Println("\nShutting down gracefully...")
-    client.Unsubscribe(topic)
-    client.Disconnect(250)
-
-    wg.Wait()
-    log.Println("Shutdown complete")
+    cancel()
 }
+
