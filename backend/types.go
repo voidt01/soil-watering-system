@@ -12,3 +12,4 @@ type MQTTConfig struct {
 	Topic    string
 	Port     int
 }
+

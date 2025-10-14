@@ -84,8 +84,3 @@ func createMsgHandler(msgChan chan<- SensorData) mqtt.MessageHandler {
 func (m *MQTTClient) MessageChan() <-chan SensorData {
 	return m.data
 }
-func (m *MQTTClient) Close() error {
-	m.client.Disconnect(250)
-	close(m.data)
-	return nil
-}
