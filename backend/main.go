@@ -23,10 +23,12 @@ func main() {
 		log.Fatalf("Failed to init MQTT: %s", err)
 	}
 
-	err = NewHTTPServer(ctx, client, 4000)
-    if err != nil {
-        log.Fatalf("Failed to init HTTP Server: %s", err)
-    }
+	go func() {
+		err = NewHTTPServer(ctx, client, 4000)
+    	if err != nil {
+        	log.Fatalf("Failed to init HTTP Server: %s", err)
+    	}
+	}()
 
 	waitForShutdown(cancel)
 }

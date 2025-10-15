@@ -94,7 +94,7 @@ func (m *MQTTClient) PublishCommand(payload []byte) error {
 	token.Wait()
 	if token.Error() != nil {
 		return fmt.Errorf("failed to acticvate pump: %w", token.Error())
-	}
+	}	
 
 	log.Printf("Published to esp32/actuator: %s", string(payload))
 	return nil

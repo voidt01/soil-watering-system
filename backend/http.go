@@ -13,7 +13,6 @@ import (
 
 type HTTPServer struct {
 	MQTTClient *MQTTClient
-	// database (next)
 }
 
 func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, port int) error {
@@ -79,8 +78,6 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print("Client disconnected")
 			return
 		case data := <-hs.MQTTClient.MessageChan():
-			// writing to db
-
 			dataByte, err := json.Marshal(data)
 			if err != nil {
 				log.Printf("failed to marshal data to JSON: %v", err)
