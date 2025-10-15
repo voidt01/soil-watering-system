@@ -1,9 +1,11 @@
 package main
 
 type SensorData struct {
-	Temperature   float32 `json:"temperature"`
-	Humidity      float32 `json:"humidity"`
-	Soil_moisture int `json:"soil_moisture"`
+	Temperature  float32 `json:"temperature"`
+	Humidity     float32 `json:"humidity"`
+	SoilMoisture int     `json:"soil_moisture"`
+	WaterPump    bool    `json:"water_pump"`
+	Timestamp    int64   `json:"-"`
 }
 
 type MQTTConfig struct {
@@ -12,4 +14,3 @@ type MQTTConfig struct {
 	Topic    string
 	Port     int
 }
-

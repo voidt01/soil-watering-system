@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -60,6 +61,7 @@ func (hs *HTTPServer) routes() http.Handler {
 	router := http.NewServeMux()
 
 	router.HandleFunc("/data-streams", hs.sseHandler)
+	router.HandleFunc("POST /actuator", hs.actuatorHandler)
 
 	return router
 }
@@ -77,7 +79,7 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print("Client disconnected")
 			return
 		case data := <-hs.MQTTClient.MessageChan():
-			// writing to db 
+			// writing to db
 
 			dataByte, err := json.Marshal(data)
 			if err != nil {
@@ -89,4 +91,31 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 			w.(http.Flusher).Flush()
 		}
 	}
+}
+
+func (hs *HTTPServer) actuatorHandler(w http.ResponseWriter, r *http.Request) {
+	dataByte, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "error reading request", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+ 	ok := json.Valid(dataByte)
+	if !ok {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err = hs.MQTTClient.PublishCommand(dataByte)
+	if err != nil {
+		log.Printf("MQTT Publish error: %v", err)
+		http.Error(w, "Failed to send command to device", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"success":true,"message":"Command sent successfully"}`))
+
 }
