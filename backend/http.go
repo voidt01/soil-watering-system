@@ -25,34 +25,37 @@ func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, port int) error {
 		Handler: httpServer.routes(),
 	}
 
-	ErrShutdownChan := make(chan error)
+	errChan := make(chan error, 1)
 
+	// Goroutine to handle graceful shutdown
 	go func() {
-		log.Print("Waiting for context to be Cancelled(http server goroutine)")
+		log.Print("Waiting for context to be cancelled (http server goroutine)")
 		<-ctx.Done()
 
 		log.Print("Shutting down http server")
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		ErrShutdownChan <- server.Shutdown(ctx)
+		errChan <- server.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("Starting up http server on port: %d", port)
 	err := server.ListenAndServe()
+	
+	// If the server closed due to shutdown (not an actual error), continue
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Printf("Error occured in server: %s", err)
+		log.Printf("Error occurred in server: %s", err)
 		return err
 	}
 
-	err = <-ErrShutdownChan
-	if err != nil {
-		log.Printf("Error occured when shutting down the server: %s", err)
-		return err
+	// Wait for the shutdown goroutine to complete
+	shutdownErr := <-errChan
+	if shutdownErr != nil {
+		log.Printf("Error occurred when shutting down the server: %s", shutdownErr)
+		return shutdownErr
 	}
 
-	log.Print("Successfully shutting down the server")
-
+	log.Print("Successfully shut down the server")
 	return nil
 }
 
@@ -78,6 +81,9 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print("Client disconnected")
 			return
 		case data := <-hs.MQTTClient.MessageChan():
+			// coba telegram
+			CheckSoilMoisture(data.SoilMoisture)
+
 			dataByte, err := json.Marshal(data)
 			if err != nil {
 				log.Printf("failed to marshal data to JSON: %v", err)
@@ -98,7 +104,7 @@ func (hs *HTTPServer) actuatorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
- 	ok := json.Valid(dataByte)
+	ok := json.Valid(dataByte)
 	if !ok {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -114,11 +120,10 @@ func (hs *HTTPServer) actuatorHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success":true,"message":"Command sent successfully"}`))
-
 }
 
 func (hs *HTTPServer) corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
