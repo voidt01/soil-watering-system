@@ -62,7 +62,7 @@ func (hs *HTTPServer) routes() http.Handler {
 	router.HandleFunc("/data-streams", hs.sseHandler)
 	router.HandleFunc("POST /actuator", hs.actuatorHandler)
 
-	return router
+	return hs.corsMiddleware(router)
 }
 
 func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
@@ -115,4 +115,19 @@ func (hs *HTTPServer) actuatorHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success":true,"message":"Command sent successfully"}`))
 
+}
+
+func (hs *HTTPServer) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
