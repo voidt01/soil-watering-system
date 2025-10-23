@@ -3,37 +3,43 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
+	"sync"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func SendSoilAlert(message string) error {
-	// Get token from environment variable
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		return fmt.Errorf("TELEGRAM_BOT_TOKEN not set")
-	}
+var (
+	lastAlertTime time.Time
+	alertMutex    sync.Mutex
+	alertCooldown = 30 * time.Minute
+)
 
-	bot, err := tgbotapi.NewBotAPI(botToken)
-	if err != nil {
-		return err
-	}
-
+func SendSoilAlert(bot *tgbotapi.BotAPI, message string) error {
 	// Your Telegram user/chat ID (get from @userinfobot on Telegram)
 	chatID := int64(8138154689) // Replace with your chat ID
 
 	msg := tgbotapi.NewMessage(chatID, message)
-	_, err = bot.Send(msg)
+	_, err := bot.Send(msg)
 	return err
 }
 
 // Usage in your soil monitoring system
-func CheckSoilMoisture(moisture int) {
+func CheckSoilMoisture(bot *tgbotapi.BotAPI, moisture int) {
 	if moisture < 2700 {
+		alertMutex.Lock()
+		defer alertMutex.Unlock()
+
+		if time.Since(lastAlertTime) < alertCooldown {
+			return
+		}
+
 		alert := fmt.Sprintf("ALERT: Soil is dry! needs water! Current: %d%%\nWatering pump activated.", moisture)
-		if err := SendSoilAlert(alert); err != nil {
+		if err := SendSoilAlert(bot, alert); err != nil {
 			log.Printf("Failed to send Telegram alert: %v", err)
+		} else {
+			lastAlertTime = time.Now()
+			log.Printf("Soil moisture alert sent: %d", moisture)
 		}
 	}
 }

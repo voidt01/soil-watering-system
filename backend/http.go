@@ -9,15 +9,19 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type HTTPServer struct {
 	MQTTClient *MQTTClient
+	TeleBot *tgbotapi.BotAPI
 }
 
-func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, port int) error {
+func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, bot *tgbotapi.BotAPI, port int) error {
 	httpServer := HTTPServer{
 		MQTTClient: mqcli,
+		TeleBot: bot,
 	}
 
 	server := http.Server{
@@ -81,8 +85,7 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print("Client disconnected")
 			return
 		case data := <-hs.MQTTClient.MessageChan():
-			// coba telegram
-			CheckSoilMoisture(data.SoilMoisture)
+			CheckSoilMoisture(hs.TeleBot, data.SoilMoisture)
 
 			dataByte, err := json.Marshal(data)
 			if err != nil {

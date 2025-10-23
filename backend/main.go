@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func main() {
@@ -23,8 +25,17 @@ func main() {
 		log.Fatalf("Failed to init MQTT: %s", err)
 	}
 
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		log.Fatal("Failed to get telegram bot token")
+	}
+	bot, err := tgbotapi.NewBotAPI(botToken)
+	if err != nil {
+		log.Fatalf("Failed to init bot: %s", err)
+	}
+
 	go func() {
-		err = NewHTTPServer(ctx, client, 4000)
+		err = NewHTTPServer(ctx, client, bot, 4000)
     	if err != nil {
         	log.Fatalf("Failed to init HTTP Server: %s", err)
     	}
