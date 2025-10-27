@@ -15,12 +15,12 @@ type MQTTClient struct {
 	data   chan SensorData
 }
 
-func NewMQTTClient(ctx context.Context, cfg MQTTConfig) (*MQTTClient, error) {
+func NewMQTTClient(ctx context.Context, cfg *Config) (*MQTTClient, error) {
 	msgChan := make(chan SensorData, 100)
 
 	opts := mqtt.NewClientOptions().
-		AddBroker(fmt.Sprintf("tcp://%s:%d", cfg.Broker, cfg.Port)).
-		SetClientID(cfg.ClientId).
+		AddBroker(fmt.Sprintf("tcp://%s:%d", cfg.MQTTBroker, cfg.MQTTPort)).
+		SetClientID(cfg.MQTTClientID).
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
 		SetConnectRetryInterval(5 * time.Second).
@@ -33,14 +33,14 @@ func NewMQTTClient(ctx context.Context, cfg MQTTConfig) (*MQTTClient, error) {
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
 		log.Println("MQTT connected")
 
-		token := c.Subscribe(cfg.Topic, 1, createMsgHandler(msgChan))
+		token := c.Subscribe(cfg.MQTTTopic, 1, createMsgHandler(msgChan))
 		token.Wait()
 		if token.Error() != nil {
 			log.Printf("Subscribe error: %v\n", token.Error())
 			return
 		}
 
-		log.Printf("Subscribed to: %s\n", cfg.Topic)
+		log.Printf("Subscribed to: %s\n", cfg.MQTTTopic)
 	})
 
 	client := mqtt.NewClient(opts)

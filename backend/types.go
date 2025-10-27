@@ -7,10 +7,3 @@ type SensorData struct {
 	WaterPump    bool    `json:"water_pump"`
 	Timestamp    int64   `json:"-"`
 }
-
-type MQTTConfig struct {
-	Broker   string
-	ClientId string
-	Topic    string
-	Port     int
-}

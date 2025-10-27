@@ -2,46 +2,61 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 
-	mqttCfg := MQTTConfig{
-		Broker:   "localhost",
-		ClientId: "go-backend-service",
-		Topic:    "esp32/sensors",
-		Port:     1883,
-	}
-
-	client, err := NewMQTTClient(ctx, mqttCfg)
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Failed to init MQTT: %s", err)
+		log.Println("No .env file found, using system env instead")
 	}
 
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		log.Fatal("Failed to get telegram bot token")
+	cfg, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to get config: %s", err)
 	}
-	bot, err := tgbotapi.NewBotAPI(botToken)
+
+	db, err := OpenDB("mysql", cfg.GetDSN())
+	if err != nil {
+		log.Fatalf("Failed to connect to DB: %s", err)
+	}
+	log.Println("Connected to database successfully")
+	defer db.Close()
+
+	mqClient, err := NewMQTTClient(ctx, cfg)
+	if err != nil {
+		log.Fatalf("Failed to connect to MQTT broker: %s", err)
+	}
+
+	notif, err := newNotification(cfg)
 	if err != nil {
 		log.Fatalf("Failed to init bot: %s", err)
 	}
 
+	wg.Add(1)
 	go func() {
-		err = NewHTTPServer(ctx, client, bot, 4000)
-    	if err != nil {
-        	log.Fatalf("Failed to init HTTP Server: %s", err)
-    	}
+		defer wg.Done()
+		err = NewHTTPServer(ctx, mqClient, notif, cfg.HTTPPort)
+		if err != nil {
+			log.Fatalf("Failed to init HTTP Server: %s", err)
+		}
 	}()
 
 	waitForShutdown(cancel)
+
+	wg.Wait()
+	log.Print("Application shutdown")
 }
 
 func waitForShutdown(cancel context.CancelFunc) {
@@ -52,4 +67,17 @@ func waitForShutdown(cancel context.CancelFunc) {
 	log.Printf("Received signal from OS: %s", sig)
 
 	cancel()
+}
+
+func OpenDB(driver, dsn string) (*sql.DB, error) {
+	db, err := sql.Open(driver, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = db.Ping(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }

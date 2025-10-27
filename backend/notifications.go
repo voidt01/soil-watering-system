@@ -15,17 +15,34 @@ var (
 	alertCooldown = 30 * time.Minute
 )
 
-func SendSoilAlert(bot *tgbotapi.BotAPI, message string) error {
-	// Your Telegram user/chat ID (get from @userinfobot on Telegram)
-	chatID := int64(8138154689) // Replace with your chat ID
+type Notifications struct {
+	bot *tgbotapi.BotAPI
+	cfg *Config
+}
+
+func newNotification(cfg *Config) (*Notifications, error) {
+	notif := &Notifications{
+		cfg: cfg,
+	}
+	bot, err := tgbotapi.NewBotAPI(cfg.TelegramBotToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init Bot")
+	}
+	notif.bot = bot
+	
+	return notif, nil
+}
+
+func (nf *Notifications) SendSoilAlert(message string) error {
+	chatID := int64(nf.cfg.TelegramChatID) 
 
 	msg := tgbotapi.NewMessage(chatID, message)
-	_, err := bot.Send(msg)
+	_, err := nf.bot.Send(msg)
 	return err
 }
 
 // Usage in your soil monitoring system
-func CheckSoilMoisture(bot *tgbotapi.BotAPI, moisture int) {
+func (nf *Notifications) CheckSoilMoisture(moisture int) {
 	if moisture < 2700 {
 		alertMutex.Lock()
 		defer alertMutex.Unlock()
@@ -35,7 +52,7 @@ func CheckSoilMoisture(bot *tgbotapi.BotAPI, moisture int) {
 		}
 
 		alert := fmt.Sprintf("ALERT: Soil is dry! needs water! Current: %d%%\nWatering pump activated.", moisture)
-		if err := SendSoilAlert(bot, alert); err != nil {
+		if err := nf.SendSoilAlert(alert); err != nil {
 			log.Printf("Failed to send Telegram alert: %v", err)
 		} else {
 			lastAlertTime = time.Now()
