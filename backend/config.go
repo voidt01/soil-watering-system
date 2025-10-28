@@ -31,12 +31,9 @@ func LoadConfig() (*Config, error) {
 		MQTTClientID: getEnv("MQTT_CLIENT_ID", "go-backend-service"),
 		MQTTTopic:    getEnv("MQTT_TOPIC", "esp32/sensors"),
 		MQTTPort:     getEnvInt("MQTT_PORT", 1883),
-
 		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:   getEnvInt64("TELEGRAM_CHAT_ID", 0),
-
 		HTTPPort: getEnvInt("HTTP_PORT", 4000),
-
 		DBHost:     getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnvInt("DB_PORT", 3306),
 		DBUser:     getEnv("DB_USER", "soil_user"),
@@ -44,7 +41,6 @@ func LoadConfig() (*Config, error) {
 		DBName:     getEnv("DB_NAME", "soil_watering"),
 	}
 
-	// Validate required fields
 	if cfg.TelegramBotToken == "" {
 		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
 	}

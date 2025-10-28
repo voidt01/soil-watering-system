@@ -34,7 +34,9 @@ func main() {
 	log.Println("Connected to database successfully")
 	defer db.Close()
 
-	mqClient, err := NewMQTTClient(ctx, cfg)
+	database := NewDatabase(db)
+
+	mqClient, err := NewMQTTClient(ctx, database, cfg)
 	if err != nil {
 		log.Fatalf("Failed to connect to MQTT broker: %s", err)
 	}

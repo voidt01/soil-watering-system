@@ -13,9 +13,10 @@ import (
 type MQTTClient struct {
 	client mqtt.Client
 	data   chan SensorData
+	database *Database
 }
 
-func NewMQTTClient(ctx context.Context, cfg *Config) (*MQTTClient, error) {
+func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTClient, error) {
 	msgChan := make(chan SensorData, 100)
 
 	opts := mqtt.NewClientOptions().
@@ -60,7 +61,7 @@ func NewMQTTClient(ctx context.Context, cfg *Config) (*MQTTClient, error) {
 		close(msgChan)
 	}()
 
-	return &MQTTClient{client: client, data: msgChan}, nil
+	return &MQTTClient{client: client, database: database, data: msgChan}, nil
 }
 
 func createMsgHandler(msgChan chan<- SensorData) mqtt.MessageHandler {
@@ -73,12 +74,13 @@ func createMsgHandler(msgChan chan<- SensorData) mqtt.MessageHandler {
 			return
 		}
 
-		data.Timestamp = time.Now().UnixMilli()
+		data.Timestamp = time.Now()
+
+		
 
 		select {
 		case msgChan <- data:
-			t := time.UnixMilli(data.Timestamp)
-			log.Printf("[%s] temperature : %.2f, humidity: %.2f, Soil Moisture value: %d, Water Pump(ON/OFF): %v", t.Format("2006-01-02 15:05:45"), data.Temperature, data.Humidity, data.SoilMoisture, data.WaterPump)
+			log.Printf("temperature : %.2f, humidity: %.2f, Soil Moisture value: %d, Water Pump(ON/OFF): %v", data.Temperature, data.Humidity, data.SoilMoisture, data.WaterPump)
 		default:
 			log.Print("Message channel full, dropping message")
 		}
