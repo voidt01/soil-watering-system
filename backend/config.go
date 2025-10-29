@@ -27,18 +27,18 @@ type Config struct {
 
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		MQTTBroker:   getEnv("MQTT_BROKER", "localhost"),
-		MQTTClientID: getEnv("MQTT_CLIENT_ID", "go-backend-service"),
-		MQTTTopic:    getEnv("MQTT_TOPIC", "esp32/sensors"),
-		MQTTPort:     getEnvInt("MQTT_PORT", 1883),
+		MQTTBroker:       getEnv("MQTT_BROKER", "localhost"),
+		MQTTClientID:     getEnv("MQTT_CLIENT_ID", "go-backend-service"),
+		MQTTTopic:        getEnv("MQTT_TOPIC", "esp32/sensors"),
+		MQTTPort:         getEnvInt("MQTT_PORT", 1883),
 		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:   getEnvInt64("TELEGRAM_CHAT_ID", 0),
-		HTTPPort: getEnvInt("HTTP_PORT", 4000),
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnvInt("DB_PORT", 3306),
-		DBUser:     getEnv("DB_USER", "soil_user"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "soil_watering"),
+		HTTPPort:         getEnvInt("HTTP_PORT", 4000),
+		DBHost:           getEnv("DB_HOST", "localhost"),
+		DBPort:           getEnvInt("DB_PORT", 5432),
+		DBUser:           getEnv("DB_USER", "soil_user"),
+		DBPassword:       getEnv("DB_PASSWORD", ""),
+		DBName:           getEnv("DB_NAME", "soil_watering"),
 	}
 
 	if cfg.TelegramBotToken == "" {
@@ -88,7 +88,7 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 }
 
 func (c *Config) GetDSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		c.DBUser,
 		c.DBPassword,
 		c.DBHost,

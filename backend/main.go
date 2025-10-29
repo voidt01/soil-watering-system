@@ -9,7 +9,7 @@ import (
 	"sync"
 	"syscall"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"github.com/joho/godotenv"
 )
 
@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("Failed to get config: %s", err)
 	}
 
-	db, err := OpenDB("mysql", cfg.GetDSN())
+	db, err := OpenDB("postgres", cfg.GetDSN())
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %s", err)
 	}
