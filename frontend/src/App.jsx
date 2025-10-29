@@ -22,10 +22,55 @@ export default function IoTDashboard() {
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   useEffect(() => {
-    connectSSE();
-  }, []);
+    let eventSource = null;
+    let reconnectTimeout = null;
+    
+    const connectSSE = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      eventSource = new EventSource(`${API_URL}/data-streams`);
 
-  // Fetch analytics when page changes to analytics
+      eventSource.onopen = () => {
+        setMqttConnected(true);
+        console.log('Connected to SSE stream');
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // Validate data
+          if (typeof data.temperature === 'number' && 
+              typeof data.humidity === 'number' && 
+              typeof data.soil_moisture === 'number') {
+            setSensorData(data);
+          }
+        } catch (err) {
+          console.error('Failed to parse SSE data:', err);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        setMqttConnected(false);
+        eventSource.close();
+        
+        reconnectTimeout = setTimeout(connectSSE, 3000);
+      };
+    };
+
+    connectSSE();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, []); 
+
   useEffect(() => {
     if (currentPage === 'analytics') {
       fetchAnalytics();
@@ -88,7 +133,6 @@ export default function IoTDashboard() {
       setIsLoadingAnalytics(false);
     }
   };
-
 
   const toggleWaterPump = async () => {
     setIsPublishing(true);
