@@ -12,12 +12,25 @@ export default function IoTDashboard() {
   });
   const [mqttConnected, setMqttConnected] = useState(false);
   const [historicalData, setHistoricalData] = useState([]);
+  const [stats, setStats] = useState({
+    avgTemp: 0,
+    avgHumidity: 0,
+    avgMoisture: 0,
+    pumpActivations: 0,
+  });
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   useEffect(() => {
     connectSSE();
-    generateHistoricalData();
   }, []);
+
+  // Fetch analytics when page changes to analytics
+  useEffect(() => {
+    if (currentPage === 'analytics') {
+      fetchAnalytics();
+    }
+  }, [currentPage]);
 
   const connectSSE = () => {
     const eventSource = new EventSource('http://localhost:4000/data-streams');
@@ -31,7 +44,6 @@ export default function IoTDashboard() {
       try {
         const data = JSON.parse(event.data);
         setSensorData(data);
-        addToHistoricalData(data);
       } catch (err) {
         console.error('Failed to parse SSE data:', err);
       }
@@ -46,30 +58,37 @@ export default function IoTDashboard() {
     return () => eventSource.close();
   };
 
-  const generateHistoricalData = () => {
-    const data = [];
-    const now = new Date();
-    for (let i = 23; i >= 0; i--) {
-      const time = new Date(now - i * 60 * 60 * 1000);
-      data.push({
-        time: time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        temperature: 22 + Math.random() * 6,
-        humidity: 40 + Math.random() * 20,
-        soil_moisture: 2500 + Math.random() * 500,
-      });
+  const fetchAnalytics = async () => {
+    setIsLoadingAnalytics(true);
+    try {
+      const response = await fetch('http://localhost:4000/analytics');
+      if (!response.ok) throw new Error('Failed to fetch analytics');
+      
+      const data = await response.json();
+      setHistoricalData(data.historical_data || []); 
+
+      const newStats = data.stats
+        ? {
+            avgTemp: data.stats.avg_temp,
+            avgHumidity: data.stats.avg_humidity,
+            avgMoisture: data.stats.avg_moisture,
+            pumpActivations: data.stats.pump_activations,
+          }
+        : {
+            avgTemp: 0,
+            avgHumidity: 0,
+            avgMoisture: 0,
+            pumpActivations: 0,
+          };
+
+      setStats(newStats);
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+    } finally {
+      setIsLoadingAnalytics(false);
     }
-    setHistoricalData(data);
   };
 
-  const addToHistoricalData = (data) => {
-    setHistoricalData(prev => {
-      const newData = [...prev, {
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        ...data
-      }];
-      return newData.slice(-24);
-    });
-  };
 
   const toggleWaterPump = async () => {
     setIsPublishing(true);
@@ -87,19 +106,6 @@ export default function IoTDashboard() {
       setIsPublishing(false);
     }
   };
-
-  const calculateStats = () => {
-    if (historicalData.length === 0) return { avgTemp: 0, avgHumidity: 0, avgMoisture: 0, pumpRuntime: 0 };
-    
-    const avgTemp = historicalData.reduce((sum, d) => sum + d.temperature, 0) / historicalData.length;
-    const avgHumidity = historicalData.reduce((sum, d) => sum + d.humidity, 0) / historicalData.length;
-    const avgMoisture = historicalData.reduce((sum, d) => sum + d.soil_moisture, 0) / historicalData.length;
-    const pumpRuntime = Math.floor(Math.random() * 120); // Simulated
-
-    return { avgTemp, avgHumidity, avgMoisture, pumpRuntime };
-  };
-
-  const stats = calculateStats();
 
   // Home Page
   const HomePage = () => (
@@ -246,58 +252,84 @@ export default function IoTDashboard() {
   const AnalyticsPage = () => (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-stone-100 p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-stone-800 mb-2">Analytics</h1>
-          <p className="text-stone-600">Historical data and trend analysis (Last 24 hours)</p>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl font-bold text-stone-800 mb-2">Analytics</h1>
+            <p className="text-stone-600">Historical data and trend analysis (Last 24 hours)</p>
+          </div>
+          <button
+            onClick={fetchAnalytics}
+            disabled={isLoadingAnalytics}
+            className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50"
+          >
+            {isLoadingAnalytics ? 'Loading...' : 'Refresh Data'}
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
-            <p className="text-stone-600 font-medium mb-2">Avg Temperature</p>
-            <p className="text-3xl font-bold text-stone-800">{stats.avgTemp.toFixed(1)}°C</p>
+        {isLoadingAnalytics ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-stone-600 text-xl">Loading analytics data...</div>
           </div>
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
-            <p className="text-stone-600 font-medium mb-2">Avg Humidity</p>
-            <p className="text-3xl font-bold text-stone-800">{stats.avgHumidity.toFixed(1)}%</p>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
-            <p className="text-stone-600 font-medium mb-2">Avg Soil Moisture</p>
-            <p className="text-3xl font-bold text-stone-800">{stats.avgMoisture.toFixed(0)}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
-            <p className="text-stone-600 font-medium mb-2">Pump Runtime</p>
-            <p className="text-3xl font-bold text-stone-800">{stats.pumpRuntime} min</p>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
+                <p className="text-stone-600 font-medium mb-2">Avg Temperature</p>
+                <p className="text-3xl font-bold text-stone-800">{stats.avgTemp.toFixed(1)}°C</p>
+              </div>
+              <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
+                <p className="text-stone-600 font-medium mb-2">Avg Humidity</p>
+                <p className="text-3xl font-bold text-stone-800">{stats.avgHumidity.toFixed(1)}%</p>
+              </div>
+              <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
+                <p className="text-stone-600 font-medium mb-2">Avg Soil Moisture</p>
+                <p className="text-3xl font-bold text-stone-800">{stats.avgMoisture.toFixed(0)}</p>
+              </div>
+              <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
+                <p className="text-stone-600 font-medium mb-2">Pump Activations</p>
+                <p className="text-3xl font-bold text-stone-800">{stats.pumpActivations}</p>
+              </div>
 
-        <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200 mb-6">
-          <h2 className="text-2xl font-bold text-stone-800 mb-6">Temperature & Humidity Trends</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={historicalData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-              <XAxis dataKey="time" stroke="#78716c" />
-              <YAxis stroke="#78716c" />
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #d6d3d1', borderRadius: '8px' }} />
-              <Legend />
-              <Line type="monotone" dataKey="temperature" stroke="#d97706" strokeWidth={2} name="Temperature (°C)" />
-              <Line type="monotone" dataKey="humidity" stroke="#0284c7" strokeWidth={2} name="Humidity (%)" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+            </div>
 
-        <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200">
-          <h2 className="text-2xl font-bold text-stone-800 mb-6">Soil Moisture Level</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={historicalData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-              <XAxis dataKey="time" stroke="#78716c" />
-              <YAxis stroke="#78716c" />
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #d6d3d1', borderRadius: '8px' }} />
-              <Area type="monotone" dataKey="soil_moisture" stroke="#0891b2" fill="#67e8f9" fillOpacity={0.6} name="Soil Moisture" />
-            </AreaChart>
-          </ResponsiveContainer>
-          <p className="text-sm text-stone-600 mt-4">* Lower values indicate higher moisture content in the soil</p>
-        </div>
+            {historicalData.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200 text-center">
+                <p className="text-stone-600 text-lg">No historical data available yet. Start collecting data to see analytics.</p>
+              </div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200 mb-6">
+                  <h2 className="text-2xl font-bold text-stone-800 mb-6">Temperature & Humidity Trends</h2>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                      <XAxis dataKey="time" stroke="#78716c" />
+                      <YAxis stroke="#78716c" />
+                      <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #d6d3d1', borderRadius: '8px' }} />
+                      <Legend />
+                      <Line type="monotone" dataKey="temperature" stroke="#d97706" strokeWidth={2} name="Temperature (°C)" />
+                      <Line type="monotone" dataKey="humidity" stroke="#0284c7" strokeWidth={2} name="Humidity (%)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200">
+                  <h2 className="text-2xl font-bold text-stone-800 mb-6">Soil Moisture Level</h2>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                      <XAxis dataKey="time" stroke="#78716c" />
+                      <YAxis stroke="#78716c" />
+                      <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #d6d3d1', borderRadius: '8px' }} />
+                      <Area type="monotone" dataKey="soil_moisture" stroke="#0891b2" fill="#67e8f9" fillOpacity={0.6} name="Soil Moisture" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  <p className="text-sm text-stone-600 mt-4">* Lower values indicate higher moisture content in the soil</p>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

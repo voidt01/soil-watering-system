@@ -41,7 +41,6 @@ func (nf *Notifications) SendSoilAlert(message string) error {
 	return err
 }
 
-// Usage in your soil monitoring system
 func (nf *Notifications) CheckSoilMoisture(moisture int) {
 	if moisture < 2700 {
 		alertMutex.Lock()

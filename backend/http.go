@@ -13,23 +13,23 @@ import (
 
 type HTTPServer struct {
 	MQTTClient *MQTTClient
-	Notif *Notifications
+	Notif      *Notifications
+	Database   *Database
 }
 
-func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, notif *Notifications, port int) error {
+func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, notif *Notifications, database *Database, cfg *Config) error {
 	httpServer := HTTPServer{
 		MQTTClient: mqcli,
-		Notif: notif,
+		Notif:      notif,
 	}
 
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler: httpServer.routes(),
 	}
 
 	errChan := make(chan error, 1)
 
-	// Goroutine to handle graceful shutdown
 	go func() {
 		log.Print("Waiting for context to be cancelled (http server goroutine)")
 		<-ctx.Done()
@@ -41,16 +41,14 @@ func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, notif *Notifications,
 		errChan <- server.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("Starting up http server on port: %d", port)
+	log.Printf("Starting up http server on port: %d", cfg.HTTPPort)
 	err := server.ListenAndServe()
-	
-	// If the server closed due to shutdown (not an actual error), continue
+
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("Error occurred in server: %s", err)
 		return err
 	}
 
-	// Wait for the shutdown goroutine to complete
 	shutdownErr := <-errChan
 	if shutdownErr != nil {
 		log.Printf("Error occurred when shutting down the server: %s", shutdownErr)
@@ -66,6 +64,7 @@ func (hs *HTTPServer) routes() http.Handler {
 
 	router.HandleFunc("/data-streams", hs.sseHandler)
 	router.HandleFunc("POST /actuator", hs.actuatorHandler)
+	router.HandleFunc("GET /analytics", hs.analyticsHandler)
 
 	return hs.corsMiddleware(router)
 }
@@ -121,6 +120,40 @@ func (hs *HTTPServer) actuatorHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success":true,"message":"Command sent successfully"}`))
+}
+
+func (hs *HTTPServer) analyticsHandler(w http.ResponseWriter, r *http.Request) {
+	historicalData, err := hs.Database.GetLast24Hours()
+	if err != nil {
+		log.Printf("Failed to get historical data: %v", err)
+		http.Error(w, "Failed to fetch historical data", http.StatusInternalServerError)
+		return
+	}
+
+	stats, err := hs.Database.GetStats()
+	if err != nil {
+		log.Printf("Failed to get stats: %v", err)
+		http.Error(w, "Failed to fetch statistics", http.StatusInternalServerError)
+		return
+	}
+
+	var transformedData []HistoricalDataResponse
+	for _, data := range historicalData {
+		transformedData = append(transformedData, HistoricalDataResponse{
+			Time:         data.CreatedAt.Format("15:04"), 
+			Temperature:  data.Temperature,
+			Humidity:     data.Humidity,
+			SoilMoisture: data.SoilMoisture,
+		})
+	}
+
+	response := AnalyticsResponse{
+		HistoricalData: transformedData,
+		Stats:          *stats,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func (hs *HTTPServer) corsMiddleware(next http.Handler) http.Handler {

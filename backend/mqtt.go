@@ -34,7 +34,7 @@ func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTC
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
 		log.Println("MQTT connected")
 
-		token := c.Subscribe(cfg.MQTTTopic, 1, createMsgHandler(msgChan))
+		token := c.Subscribe(cfg.MQTTTopic, 1, createMsgHandler(msgChan, database))
 		token.Wait()
 		if token.Error() != nil {
 			log.Printf("Subscribe error: %v\n", token.Error())
@@ -64,7 +64,7 @@ func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTC
 	return &MQTTClient{client: client, database: database, data: msgChan}, nil
 }
 
-func createMsgHandler(msgChan chan<- SensorData) mqtt.MessageHandler {
+func createMsgHandler(msgChan chan<- SensorData, database *Database) mqtt.MessageHandler {
 	return func(c mqtt.Client, msg mqtt.Message) {
 		var data SensorData
 
@@ -76,7 +76,11 @@ func createMsgHandler(msgChan chan<- SensorData) mqtt.MessageHandler {
 
 		data.Timestamp = time.Now()
 
-		
+		if err := database.InsertSensorData(data); err != nil {
+			log.Printf("Failed to save sensor data to DB: %s", err)
+		} else {
+			log.Printf("Data saved to DB successfully")
+		}
 
 		select {
 		case msgChan <- data:

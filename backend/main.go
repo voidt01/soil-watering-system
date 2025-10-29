@@ -49,7 +49,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = NewHTTPServer(ctx, mqClient, notif, cfg.HTTPPort)
+		err = NewHTTPServer(ctx, mqClient, notif, database, cfg)
 		if err != nil {
 			log.Fatalf("Failed to init HTTP Server: %s", err)
 		}
