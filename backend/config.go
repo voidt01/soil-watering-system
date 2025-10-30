@@ -12,6 +12,10 @@ type Config struct {
 	MQTTClientID string
 	MQTTTopic    string
 	MQTTPort     int
+	MQTTUseTLS   bool
+	MQTTCAFile   string
+	MQTTCertFile string
+	MQTTKeyFile  string
 
 	TelegramBotToken string
 	TelegramChatID   int64
@@ -27,10 +31,15 @@ type Config struct {
 
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
-		MQTTBroker:       getEnv("MQTT_BROKER", "localhost"),
-		MQTTClientID:     getEnv("MQTT_CLIENT_ID", "go-backend-service"),
-		MQTTTopic:        getEnv("MQTT_TOPIC", "esp32/sensors"),
-		MQTTPort:         getEnvInt("MQTT_PORT", 1883),
+		MQTTBroker:   getEnv("MQTT_BROKER", "localhost"),
+		MQTTClientID: getEnv("MQTT_CLIENT_ID", "go-backend-service"),
+		MQTTTopic:    getEnv("MQTT_TOPIC", "esp32/sensors"),
+		MQTTPort:     getEnvInt("MQTT_PORT", 1883),
+		MQTTUseTLS:   getEnvBool("MQTT_USE_TLS", false),
+		MQTTCAFile:   getEnv("MQTT_CA_FILE", "./certs/ca.crt"),
+		MQTTCertFile: getEnv("MQTT_CERT_FILE", "./certs/client.crt"),
+		MQTTKeyFile:  getEnv("MQTT_KEY_FILE", "./certs/client.key"),
+
 		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:   getEnvInt64("TELEGRAM_CHAT_ID", 0),
 		HTTPPort:         getEnvInt("HTTP_PORT", 4000),
@@ -82,6 +91,19 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 	value, err := strconv.ParseInt(valueStr, 10, 64)
 	if err != nil {
 		log.Printf("Warning: Invalid int64 for %s='%s', using default %d", key, valueStr, defaultValue)
+		return defaultValue
+	}
+	return value
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	valueStr := os.Getenv(key)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.ParseBool(valueStr)
+	if err != nil {
+		log.Printf("Warning: Invalid boolean for %s='%s', using default %t", key, valueStr, defaultValue)
 		return defaultValue
 	}
 	return value

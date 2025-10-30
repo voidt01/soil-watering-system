@@ -50,7 +50,7 @@ func (nf *Notifications) CheckSoilMoisture(moisture int) {
 			return
 		}
 
-		alert := fmt.Sprintf("ALERT: Soil is dry! needs water! Current: %d%%\nWatering pump activated.", moisture)
+		alert := fmt.Sprintf("ALERT: Soil is dry! needs water! Current: %d\nWatering pump activated.", moisture)
 		if err := nf.SendSoilAlert(alert); err != nil {
 			log.Printf("Failed to send Telegram alert: %v", err)
 		} else {
