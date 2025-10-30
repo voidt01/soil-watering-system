@@ -2,48 +2,30 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 type MQTTClient struct {
-	client   mqtt.Client
-	data     chan SensorData
+	client mqtt.Client
+	data   chan SensorData
 	database *Database
 }
 
 func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTClient, error) {
 	msgChan := make(chan SensorData, 100)
 
-	brokerURL := fmt.Sprintf("tcp://%s:%d", cfg.MQTTBroker, cfg.MQTTPort)
-	if cfg.MQTTUseTLS {
-		brokerURL = fmt.Sprintf("ssl://%s:%d", cfg.MQTTBroker, cfg.MQTTPort)
-	}
-
 	opts := mqtt.NewClientOptions().
-		AddBroker(brokerURL).
+		AddBroker(fmt.Sprintf("tcp://%s:%d", cfg.MQTTBroker, cfg.MQTTPort)).
 		SetClientID(cfg.MQTTClientID).
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
 		SetConnectRetryInterval(5 * time.Second).
 		SetKeepAlive(30 * time.Second)
-
-	// Configure TLS if enabled
-	if cfg.MQTTUseTLS {
-		tlsConfig, err := newTLSConfig(cfg.MQTTCAFile, cfg.MQTTCertFile, cfg.MQTTKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS config: %w", err)
-		}
-		opts.SetTLSConfig(tlsConfig)
-		log.Println("TLS enabled for MQTT connection")
-	}
 
 	opts.SetConnectionLostHandler(func(c mqtt.Client, err error) {
 		log.Printf("MQTT connection lost: %v\n", err)
@@ -72,7 +54,7 @@ func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTC
 	}
 
 	go func() {
-		log.Print("Waiting for context to be Cancelled (mqtt goroutine)")
+		log.Print("Waiting for context to be Cancelled(mqtt goroutine)")
 		<-ctx.Done()
 		log.Print("Cleaning up mqtt client")
 		client.Disconnect(250)
@@ -80,34 +62,6 @@ func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTC
 	}()
 
 	return &MQTTClient{client: client, database: database, data: msgChan}, nil
-}
-
-// newTLSConfig creates a TLS configuration for mutual TLS authentication
-func newTLSConfig(caFile, certFile, keyFile string) (*tls.Config, error) {
-	// Load CA certificate
-	caCert, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CA certificate: %w", err)
-	}
-
-	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to parse CA certificate")
-	}
-
-	// Load client certificate and key
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load client certificate: %w", err)
-	}
-
-	tlsConfig := &tls.Config{
-		RootCAs:      caCertPool,
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
-	}
-
-	return tlsConfig, nil
 }
 
 func createMsgHandler(msgChan chan<- SensorData, database *Database) mqtt.MessageHandler {
@@ -130,8 +84,7 @@ func createMsgHandler(msgChan chan<- SensorData, database *Database) mqtt.Messag
 
 		select {
 		case msgChan <- data:
-			log.Printf("temperature: %.2f, humidity: %.2f, Soil Moisture: %d, Water Pump: %v",
-				data.Temperature, data.Humidity, data.SoilMoisture, data.WaterPump)
+			log.Printf("temperature : %.2f, humidity: %.2f, Soil Moisture value: %d, Water Pump(ON/OFF): %v", data.Temperature, data.Humidity, data.SoilMoisture, data.WaterPump)
 		default:
 			log.Print("Message channel full, dropping message")
 		}
@@ -146,8 +99,8 @@ func (m *MQTTClient) PublishCommand(payload []byte) error {
 	token := m.client.Publish("esp32/actuator", 1, false, payload)
 	token.Wait()
 	if token.Error() != nil {
-		return fmt.Errorf("failed to activate pump: %w", token.Error())
-	}
+		return fmt.Errorf("failed to acticvate pump: %w", token.Error())
+	}	
 
 	log.Printf("Published to esp32/actuator: %s", string(payload))
 	return nil
