@@ -24,33 +24,18 @@ export default function IoTDashboard() {
   useEffect(() => {
     let eventSource = null;
     let reconnectTimeout = null;
-    let keepAliveInterval = null;
-    let isConnecting = false;
     
     const connectSSE = () => {
-      if (isConnecting) return;
-      
       if (eventSource) {
         eventSource.close();
       }
       
-      isConnecting = true;
-      console.log('Attempting to connect to SSE...');
-      eventSource = new EventSource('http://localhost:4000/data-streams');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      eventSource = new EventSource(`${API_URL}/data-streams`);
 
       eventSource.onopen = () => {
-        isConnecting = false;
         setMqttConnected(true);
-        console.log('✅ Connected to SSE stream');
-        
-        // Clear any existing keepalive
-        if (keepAliveInterval) clearInterval(keepAliveInterval);
-        
-        keepAliveInterval = setInterval(() => {
-          if (eventSource && eventSource.readyState === EventSource.OPEN) {
-            console.log('🔄 Connection alive');
-          }
-        }, 30000);
+        console.log('Connected to SSE stream');
       };
 
       eventSource.onmessage = (event) => {
@@ -68,27 +53,11 @@ export default function IoTDashboard() {
       };
 
       eventSource.onerror = (error) => {
-        console.error('❌ SSE connection error');
-        isConnecting = false;
+        console.error('SSE error:', error);
         setMqttConnected(false);
+        eventSource.close();
         
-        if (keepAliveInterval) {
-          clearInterval(keepAliveInterval);
-          keepAliveInterval = null;
-        }
-        
-        if (eventSource) {
-          eventSource.close();
-        }
-        
-        // Reconnect after 3 seconds
-        if (!reconnectTimeout) {
-          console.log('🔄 Reconnecting in 3 seconds...');
-          reconnectTimeout = setTimeout(() => {
-            reconnectTimeout = null;
-            connectSSE();
-          }, 3000);
-        }
+        reconnectTimeout = setTimeout(connectSSE, 3000);
       };
     };
 
@@ -96,7 +65,6 @@ export default function IoTDashboard() {
 
     return () => {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (keepAliveInterval) clearInterval(keepAliveInterval);
       if (eventSource) {
         eventSource.close();
       }
@@ -104,10 +72,36 @@ export default function IoTDashboard() {
   }, []); 
 
   useEffect(() => {
-    if (currentPage === 'analytics' && historicalData.length === 0) {
+    if (currentPage === 'analytics') {
       fetchAnalytics();
     }
   }, [currentPage]);
+
+  const connectSSE = () => {
+    const eventSource = new EventSource('http://localhost:4000/data-streams');
+
+    eventSource.onopen = () => {
+      setMqttConnected(true);
+      console.log('Connected to SSE stream');
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setSensorData(data);
+      } catch (err) {
+        console.error('Failed to parse SSE data:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      setMqttConnected(false);
+      eventSource.close();
+      setTimeout(connectSSE, 3000);
+    };
+
+    return () => eventSource.close();
+  };
 
   const fetchAnalytics = async () => {
     setIsLoadingAnalytics(true);
@@ -116,25 +110,14 @@ export default function IoTDashboard() {
       if (!response.ok) throw new Error('Failed to fetch analytics');
       
       const data = await response.json();
-      console.log('Analytics data received:', data); // Debug log
-      
-      const transformedData = (data.historical_data || []).map((item, i) => ({
-        time: item.time,
-        temperature: Number(item.temperature) || 0,
-        humidity: Number(item.humidity) || 0,
-        soil_moisture: Number(item.soil_moisture) || 0,
-      }));
-    
-      
-      setHistoricalData(transformedData); 
-      console.log('Transformed data:', transformedData); // Debug log
+      setHistoricalData(data.historical_data || []); 
 
       const newStats = data.stats
         ? {
-            avgTemp: parseFloat(data.stats.avg_temp) || 0,
-            avgHumidity: parseFloat(data.stats.avg_humidity) || 0,
-            avgMoisture: parseInt(data.stats.avg_moisture) || 0,
-            pumpActivations: parseInt(data.stats.pump_activations) || 0,
+            avgTemp: data.stats.avg_temp,
+            avgHumidity: data.stats.avg_humidity,
+            avgMoisture: data.stats.avg_moisture,
+            pumpActivations: data.stats.pump_activations,
           }
         : {
             avgTemp: 0,
@@ -348,7 +331,7 @@ export default function IoTDashboard() {
               </div>
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
                 <p className="text-stone-600 font-medium mb-2">Pump Activations</p>
-                <p className="text-3xl font-bold text-stone-800">{stats.pumpActivations} sec</p>
+                <p className="text-3xl font-bold text-stone-800">{stats.pumpActivations}</p>
               </div>
 
             </div>
@@ -359,55 +342,14 @@ export default function IoTDashboard() {
               </div>
             ) : (
               <>
-                <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200">
-                  <h2 className="text-2xl font-bold text-stone-800 mb-6">Soil Moisture Level</h2>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={historicalData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                      <XAxis dataKey="time" stroke="#78716c" interval="preserveStartEnd"/>
-                      <YAxis stroke="#78716c" />
-                      <Tooltip
-                        formatter={(value, name) => {
-                          return [`${Math.round(value)}`, "Soil Moisture"];
-                        }}
-                        contentStyle={{
-                          backgroundColor: "#fff",
-                          border: "1px solid #d6d3d1",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                      <Line type="monotone" dataKey="soil_moisture" stroke="#0891b2" strokeWidth={2} name="Soil Moisture"/>
-                    </LineChart>
-                  </ResponsiveContainer>
-                  <p className="text-sm text-stone-600 mt-4">
-                    * Lower values indicate higher moisture content in the soil
-                  </p>
-                </div>
-
                 <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200 mb-6">
                   <h2 className="text-2xl font-bold text-stone-800 mb-6">Temperature & Humidity Trends</h2>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={historicalData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                      <XAxis dataKey="time" stroke="#78716c" tick={{ fontSize: 12 }} interval="preserveStartEnd"/>
+                      <XAxis dataKey="time" stroke="#78716c" />
                       <YAxis stroke="#78716c" />
-                      <Tooltip
-                        formatter={(value, name) => {
-                          if (name === "Temperature (°C)") {
-                            return [`${value.toFixed(2)}°C`, name];
-                          }
-                          if (name === "Humidity (%)") {
-                            return [`${value.toFixed(2)}%`, name];
-                          }
-                          return [value, name];
-                        }}
-                        contentStyle={{
-                          backgroundColor: "#fff",
-                          border: "1px solid #d6d3d1",
-                          borderRadius: "8px",
-                        }}
-                      />
+                      <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #d6d3d1', borderRadius: '8px' }} />
                       <Legend />
                       <Line type="monotone" dataKey="temperature" stroke="#d97706" strokeWidth={2} name="Temperature (°C)" />
                       <Line type="monotone" dataKey="humidity" stroke="#0284c7" strokeWidth={2} name="Humidity (%)" />
@@ -415,7 +357,19 @@ export default function IoTDashboard() {
                   </ResponsiveContainer>
                 </div>
 
-                
+                <div className="bg-white rounded-2xl p-8 shadow-lg border border-stone-200">
+                  <h2 className="text-2xl font-bold text-stone-800 mb-6">Soil Moisture Level</h2>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                      <XAxis dataKey="time" stroke="#78716c" />
+                      <YAxis stroke="#78716c" />
+                      <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #d6d3d1', borderRadius: '8px' }} />
+                      <Area type="monotone" dataKey="soil_moisture" stroke="#0891b2" fill="#67e8f9" fillOpacity={0.6} name="Soil Moisture" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  <p className="text-sm text-stone-600 mt-4">* Lower values indicate higher moisture content in the soil</p>
+                </div>
               </>
             )}
           </>

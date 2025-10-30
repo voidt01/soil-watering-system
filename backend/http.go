@@ -21,7 +21,6 @@ func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, notif *Notifications,
 	httpServer := HTTPServer{
 		MQTTClient: mqcli,
 		Notif:      notif,
-		Database: database,
 	}
 
 	server := http.Server{
@@ -74,24 +73,14 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // For Nginx proxy
 
 	clientGone := r.Context().Done()
-	
-	// Send keep-alive comments every 15 seconds to prevent timeout
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
 
 	for {
 		select {
 		case <-clientGone:
 			log.Print("Client disconnected")
 			return
-			
-		case <-ticker.C:
-			fmt.Fprintf(w, ": keep-alive\n\n")
-			w.(http.Flusher).Flush()
-			
 		case data := <-hs.MQTTClient.MessageChan():
 			hs.Notif.CheckSoilMoisture(data.SoilMoisture)
 
@@ -149,15 +138,14 @@ func (hs *HTTPServer) analyticsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var transformedData []HistoricalDataResponse
-	for _, d := range historicalData {
+	for _, data := range historicalData {
 		transformedData = append(transformedData, HistoricalDataResponse{
-			Time:         d.Time.Format("15:04"),
-			Temperature:  d.Temperature,
-			Humidity:     d.Humidity,
-			SoilMoisture: d.SoilMoisture,
+			Time:         data.CreatedAt.Format("15:04"), 
+			Temperature:  data.Temperature,
+			Humidity:     data.Humidity,
+			SoilMoisture: data.SoilMoisture,
 		})
 	}
-
 
 	response := AnalyticsResponse{
 		HistoricalData: transformedData,

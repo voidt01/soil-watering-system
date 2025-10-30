@@ -19,7 +19,7 @@ func (d *Database) InsertSensorData(data SensorData) error {
 		VALUES($1, $2, $3, $4, $5)
 	`
 
-	_, err := d.DB.Exec(query,
+	_, err := d.DB.Exec(query, 
 		data.Temperature,
 		data.Humidity,
 		data.SoilMoisture,
@@ -34,45 +34,45 @@ func (d *Database) InsertSensorData(data SensorData) error {
 }
 
 func (d *Database) GetLast24Hours() ([]HistoricalData, error) {
-    query := `
-        SELECT 
-            DATE_TRUNC('minute', created_at) AS time,
-            AVG(temperature) AS temperature,
-            AVG(humidity) AS humidity,
-            AVG(soil_moisture) AS soil_moisture
-        FROM sensor_data
-        WHERE created_at >= NOW() - INTERVAL '24 hours'
-        GROUP BY time
-        ORDER BY time ASC;
-    `
+	query := `
+		SELECT 
+			temperature,
+			humidity,
+			soil_moisture,
+			water_pump,
+			created_at
+		FROM sensor_data
+		WHERE created_at >= NOW() - INTERVAL '24 hours'
+		ORDER BY created_at ASC
+	`
 
-    rows, err := d.DB.Query(query)
-    if err != nil {
-        return nil, fmt.Errorf("failed to query historical data: %w", err)
-    }
-    defer rows.Close()
+	rows, err := d.DB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query historical data: %w", err)
+	}
+	defer rows.Close()
 
-    var data []HistoricalData
+	var data []HistoricalData
+	for rows.Next() {
+		var h HistoricalData
+		err := rows.Scan(
+			&h.Temperature,
+			&h.Humidity,
+			&h.SoilMoisture,
+			&h.WaterPump,
+			&h.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		data = append(data, h)
+	}
 
-    for rows.Next() {
-        var h HistoricalData
-        err := rows.Scan(
-            &h.Time,
-            &h.Temperature,
-            &h.Humidity,
-            &h.SoilMoisture,
-        )
-        if err != nil {
-            return nil, fmt.Errorf("failed to scan row: %w", err)
-        }
-        data = append(data, h)
-    }
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
 
-    if err = rows.Err(); err != nil {
-        return nil, fmt.Errorf("error iterating rows: %w", err)
-    }
-
-    return data, nil
+	return data, nil
 }
 
 func (d *Database) GetStats() (*Stats, error) {
