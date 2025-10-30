@@ -9,10 +9,21 @@
 *.out
 *.test
 
-React
+# React
 /frontend/node_modules/
 frontend/build/
 
 # Env files
 .env
 .env.local
+
+# Certificates and keys (NEVER commit these!)
+certs/
+*.key
+*.crt
+*.csr
+*.pem
+*.srl
+
+# Mosquitto password file
+passwordfile
