@@ -2,20 +2,19 @@ package main
 
 import "time"
 
+type HistoricalData struct {
+	Time         time.Time
+	Temperature  float32
+	Humidity     float32
+	SoilMoisture int
+}
+
 type SensorData struct {
 	Temperature  float32   `json:"temperature"`
 	Humidity     float32   `json:"humidity"`
 	SoilMoisture int       `json:"soil_moisture"`
 	WaterPump    bool      `json:"water_pump"`
 	Timestamp    time.Time `json:"-"`
-}
-
-type HistoricalData struct {
-	Temperature  float32   
-	Humidity     float32   
-	SoilMoisture int       
-	WaterPump    bool      
-	CreatedAt    time.Time 
 }
 
 type HistoricalDataResponse struct {

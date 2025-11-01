@@ -140,7 +140,7 @@ func (hs *HTTPServer) analyticsHandler(w http.ResponseWriter, r *http.Request) {
 	var transformedData []HistoricalDataResponse
 	for _, data := range historicalData {
 		transformedData = append(transformedData, HistoricalDataResponse{
-			Time:         data.CreatedAt.Format("15:04"), 
+			Time:         data.Time.Format("15:04"), 
 			Temperature:  data.Temperature,
 			Humidity:     data.Humidity,
 			SoilMoisture: data.SoilMoisture,
