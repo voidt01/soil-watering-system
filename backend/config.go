@@ -12,6 +12,8 @@ type Config struct {
 	MQTTClientID string
 	MQTTTopic    string
 	MQTTPort     int
+	MQTTUser     string
+	MQTTPassword string
 
 	TelegramBotToken string
 	TelegramChatID   int64
@@ -31,6 +33,8 @@ func LoadConfig() (*Config, error) {
 		MQTTClientID:     getEnv("MQTT_CLIENT_ID", "go-backend-service"),
 		MQTTTopic:        getEnv("MQTT_TOPIC", "esp32/sensors"),
 		MQTTPort:         getEnvInt("MQTT_PORT", 1883),
+		MQTTUser:         getEnv("MQTT_USER", ""),
+		MQTTPassword:     getEnv("MQTT_PASSWORD", ""),
 		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID:   getEnvInt64("TELEGRAM_CHAT_ID", 0),
 		HTTPPort:         getEnvInt("HTTP_PORT", 4000),
@@ -41,6 +45,12 @@ func LoadConfig() (*Config, error) {
 		DBName:           getEnv("DB_NAME", "soil_watering"),
 	}
 
+	if cfg.MQTTUser == "" {
+		return nil, fmt.Errorf("MQTT USER is required")
+	}
+	if cfg.MQTTPassword == "" {
+		return nil, fmt.Errorf("MQTT PASSWORD is required")
+	}
 	if cfg.TelegramBotToken == "" {
 		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
 	}

@@ -16,3 +16,5 @@ frontend/build/
 # Env files
 .env
 .env.local
+
+mosquitto/config/passwd

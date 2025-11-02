@@ -3,6 +3,8 @@ import { Droplet, Wind, Thermometer, Zap, Home, BarChart3, Activity, Wifi, WifiO
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 export default function IoTDashboard() {
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  
   const [currentPage, setCurrentPage] = useState('home');
   const [sensorData, setSensorData] = useState({
     temperature: 0,
@@ -30,7 +32,7 @@ export default function IoTDashboard() {
         eventSource.close();
       }
       
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      console.log('Connecting to SSE:', `${API_URL}/data-streams`);
       eventSource = new EventSource(`${API_URL}/data-streams`);
 
       eventSource.onopen = () => {
@@ -46,6 +48,7 @@ export default function IoTDashboard() {
               typeof data.humidity === 'number' && 
               typeof data.soil_moisture === 'number') {
             setSensorData(data);
+            console.log('Received data:', data);
           }
         } catch (err) {
           console.error('Failed to parse SSE data:', err);
@@ -57,7 +60,10 @@ export default function IoTDashboard() {
         setMqttConnected(false);
         eventSource.close();
         
-        reconnectTimeout = setTimeout(connectSSE, 3000);
+        reconnectTimeout = setTimeout(() => {
+          console.log('Attempting to reconnect...');
+          connectSSE();
+        }, 3000);
       };
     };
 
@@ -69,7 +75,7 @@ export default function IoTDashboard() {
         eventSource.close();
       }
     };
-  }, []); 
+  }, [API_URL]); 
 
   useEffect(() => {
     if (currentPage === 'analytics') {
@@ -77,39 +83,15 @@ export default function IoTDashboard() {
     }
   }, [currentPage]);
 
-  const connectSSE = () => {
-    const eventSource = new EventSource('http://localhost:4000/data-streams');
-
-    eventSource.onopen = () => {
-      setMqttConnected(true);
-      console.log('Connected to SSE stream');
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setSensorData(data);
-      } catch (err) {
-        console.error('Failed to parse SSE data:', err);
-      }
-    };
-
-    eventSource.onerror = () => {
-      setMqttConnected(false);
-      eventSource.close();
-      setTimeout(connectSSE, 3000);
-    };
-
-    return () => eventSource.close();
-  };
-
   const fetchAnalytics = async () => {
     setIsLoadingAnalytics(true);
     try {
-      const response = await fetch('http://localhost:4000/analytics');
+      console.log('Fetching analytics from:', `${API_URL}/analytics`);
+      const response = await fetch(`${API_URL}/analytics`);
       if (!response.ok) throw new Error('Failed to fetch analytics');
       
       const data = await response.json();
+      console.log('Analytics data:', data);
       setHistoricalData(data.historical_data || []); 
 
       const newStats = data.stats
@@ -138,14 +120,18 @@ export default function IoTDashboard() {
     setIsPublishing(true);
     try {
       const payload = { water_pump: !sensorData.water_pump };
-      const response = await fetch('http://localhost:4000/actuator', {
+      console.log('Sending command to:', `${API_URL}/actuator`, payload);
+      const response = await fetch(`${API_URL}/actuator`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      console.log('Command response:', result);
     } catch (err) {
       console.error('Error:', err);
+      alert('Failed to send command. Check console for details.');
     } finally {
       setIsPublishing(false);
     }
@@ -216,7 +202,7 @@ export default function IoTDashboard() {
           <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${mqttConnected ? 'bg-green-100' : 'bg-red-100'}`}>
             {mqttConnected ? <Wifi className="w-5 h-5 text-green-700" /> : <WifiOff className="w-5 h-5 text-red-700" />}
             <span className={`font-semibold ${mqttConnected ? 'text-green-700' : 'text-red-700'}`}>
-              {mqttConnected ? 'MQTT Connected' : 'MQTT Disconnected'}
+              {mqttConnected ? 'Connected' : 'Disconnected'}
             </span>
           </div>
         </div>
@@ -331,9 +317,8 @@ export default function IoTDashboard() {
               </div>
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-stone-200">
                 <p className="text-stone-600 font-medium mb-2">Pump Activations</p>
-                <p className="text-3xl font-bold text-stone-800">{stats.pumpActivations}</p>
+                <p className="text-3xl font-bold text-stone-800">{stats.pumpActivations} seconds</p>
               </div>
-
             </div>
 
             {historicalData.length === 0 ? (

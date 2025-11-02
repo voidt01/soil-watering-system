@@ -6,7 +6,7 @@ type HistoricalData struct {
 	Time         time.Time
 	Temperature  float32
 	Humidity     float32
-	SoilMoisture int
+	SoilMoisture float32
 }
 
 type SensorData struct {
@@ -21,7 +21,7 @@ type HistoricalDataResponse struct {
 	Time         string  `json:"time"`
 	Temperature  float32 `json:"temperature"`
 	Humidity     float32 `json:"humidity"`
-	SoilMoisture int     `json:"soil_moisture"`
+	SoilMoisture float32 `json:"soil_moisture"`
 }
 
 type Stats struct {

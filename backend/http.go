@@ -21,6 +21,7 @@ func NewHTTPServer(ctx context.Context, mqcli *MQTTClient, notif *Notifications,
 	httpServer := HTTPServer{
 		MQTTClient: mqcli,
 		Notif:      notif,
+		Database:   database,
 	}
 
 	server := http.Server{
@@ -82,7 +83,7 @@ func (hs *HTTPServer) sseHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print("Client disconnected")
 			return
 		case data := <-hs.MQTTClient.MessageChan():
-			hs.Notif.CheckSoilMoisture(data.SoilMoisture)
+			hs.Notif.CheckSoilMoisture(data.SoilMoisture, data.Temperature, data.Humidity)
 
 			dataByte, err := json.Marshal(data)
 			if err != nil {
@@ -140,7 +141,7 @@ func (hs *HTTPServer) analyticsHandler(w http.ResponseWriter, r *http.Request) {
 	var transformedData []HistoricalDataResponse
 	for _, data := range historicalData {
 		transformedData = append(transformedData, HistoricalDataResponse{
-			Time:         data.Time.Format("15:04"), 
+			Time:         data.Time.Format("15:04"),
 			Temperature:  data.Temperature,
 			Humidity:     data.Humidity,
 			SoilMoisture: data.SoilMoisture,

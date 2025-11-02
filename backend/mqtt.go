@@ -21,6 +21,8 @@ func NewMQTTClient(ctx context.Context, database *Database, cfg *Config) (*MQTTC
 
 	opts := mqtt.NewClientOptions().
 		AddBroker(fmt.Sprintf("tcp://%s:%d", cfg.MQTTBroker, cfg.MQTTPort)).
+		SetUsername(cfg.MQTTUser).
+		SetPassword(cfg.MQTTPassword).
 		SetClientID(cfg.MQTTClientID).
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
